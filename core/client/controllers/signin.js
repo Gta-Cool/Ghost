@@ -7,15 +7,23 @@ var SigninController = Ember.Controller.extend(SimpleAuth.AuthenticationControll
 
     actions: {
         authenticate: function () {
-            var data = this.getProperties('identification', 'password');
+            var model = this.get('model'),
+                data = model.getProperties('identification', 'password');
 
-            return this._super(data);
+            this._super(data).catch(function () {
+                // If simple-auth's authenticate rejects we need to catch it
+                // to avoid an unhandled rejection exception.
+            });
         },
 
         validateAndAuthenticate: function () {
             var self = this;
 
-            this.validate({ format: false }).then(function () {
+            // Manually trigger events for input fields, ensuring legacy compatibility with
+            // browsers and password managers that don't send proper events on autofill
+            $('#login').find('input').trigger('change');
+
+            this.validate({format: false}).then(function () {
                 self.notifications.closePassive();
                 self.send('authenticate');
             }).catch(function (errors) {

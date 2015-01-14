@@ -1,7 +1,6 @@
 /*globals describe, beforeEach, afterEach, it*/
 /*jshint expr:true*/
-var assert   = require('assert'),
-    moment   = require('moment'),
+var moment   = require('moment'),
     should   = require('should'),
     sinon    = require('sinon'),
     Promise  = require('bluebird'),
@@ -10,8 +9,11 @@ var assert   = require('assert'),
 
 // Stuff we are testing
     api      = require('../../server/api'),
-    config   = rewire('../../server/config'),
-    frontend = rewire('../../server/controllers/frontend');
+
+    frontend = rewire('../../server/controllers/frontend'),
+    config   = require('../../server/config'),
+    origConfig = _.cloneDeep(config),
+    defaultConfig  = require('../../../config.example')[process.env.NODE_ENV];
 
 // To stop jshint complaining
 should.equal(true, true);
@@ -19,7 +21,11 @@ should.equal(true, true);
 describe('Frontend Controller', function () {
     var sandbox,
         apiSettingsStub,
-        adminEditPagePath = '/ghost/editor/';
+        adminEditPagePath = '/ghost/editor/',
+
+        resetConfig = function () {
+            config.set(_.merge({}, origConfig, defaultConfig));
+        };
 
     beforeEach(function () {
         sandbox = sinon.sandbox.create();
@@ -29,6 +35,7 @@ describe('Frontend Controller', function () {
     });
 
     afterEach(function () {
+        resetConfig();
         sandbox.restore();
     });
 
@@ -61,6 +68,12 @@ describe('Frontend Controller', function () {
                     value: 5
                 }]
             }));
+        });
+
+        afterEach(function () {
+            config.set({paths: origConfig.paths});
+            frontend.__set__('config', {paths: origConfig.paths});
+            sandbox.restore();
         });
 
         it('Redirects to home if page number is -1', function () {
@@ -204,7 +217,7 @@ describe('Frontend Controller', function () {
                 res = {
                     locals: {},
                     render: function (view) {
-                        assert.equal(view, 'home');
+                        view.should.equal('home');
                         done();
                     }
                 };
@@ -223,7 +236,7 @@ describe('Frontend Controller', function () {
                 res = {
                     locals: {},
                     render: function (view) {
-                        assert.equal(view, 'index');
+                        view.should.equal('index');
                         done();
                     }
                 };
@@ -255,7 +268,7 @@ describe('Frontend Controller', function () {
                 res = {
                     locals: {},
                     render: function (view) {
-                        assert.equal(view, 'index');
+                        view.should.equal('index');
                         done();
                     }
                 };
@@ -371,9 +384,9 @@ describe('Frontend Controller', function () {
                     res = {
                         locals: {},
                         render: function (view, context) {
-                            assert.equal(view, 'tag');
-                            assert.equal(context.tag, mockTags[0]);
-                            assert.equal(context.posts[0].author.email, undefined);
+                            view.should.equal('tag');
+                            context.tag.should.equal(mockTags[0]);
+                            should.not.exist(context.posts[0].author.email);
                             done();
                         }
                     };
@@ -503,6 +516,7 @@ describe('Frontend Controller', function () {
                     author: {
                         id: 1,
                         name: 'Test User',
+                        slug: 'test',
                         email: 'test@ghost.org'
                     }
                 }]
@@ -518,6 +532,7 @@ describe('Frontend Controller', function () {
                     author: {
                         id: 1,
                         name: 'Test User',
+                        slug: 'test',
                         email: 'test@ghost.org'
                     }
                 }]
@@ -533,6 +548,7 @@ describe('Frontend Controller', function () {
                     author: {
                         id: 1,
                         name: 'Test User',
+                        slug: 'test',
                         email: 'test@ghost.org'
                     }
                 }]
@@ -592,9 +608,9 @@ describe('Frontend Controller', function () {
                         res = {
                             locals: {},
                             render: function (view, context) {
-                                assert.equal(view, 'page-' + mockPosts[2].posts[0].slug);
-                                assert.equal(context.post, mockPosts[2].posts[0]);
-                                assert.equal(context.post.author.email, undefined);
+                                view.should.equal('page-' + mockPosts[2].posts[0].slug);
+                                context.post.should.equal(mockPosts[2].posts[0]);
+                                should.not.exist(context.post.author.email);
                                 done();
                             }
                         };
@@ -622,9 +638,9 @@ describe('Frontend Controller', function () {
                         res = {
                             locals: {},
                             render: function (view, context) {
-                                assert.equal(view, 'page');
-                                assert.equal(context.post, mockPosts[0].posts[0]);
-                                assert.equal(context.post.author.email, undefined);
+                                view.should.equal('page');
+                                context.post.should.equal(mockPosts[0].posts[0]);
+                                should.not.exist(context.post.author.email);
                                 done();
                             }
                         };
@@ -635,6 +651,21 @@ describe('Frontend Controller', function () {
                 it('will NOT render static page via /YYY/MM/DD/:slug', function (done) {
                     var req = {
                             path: '/' + ['2012/12/30', mockPosts[0].posts[0].slug].join('/')
+                        },
+                        res = {
+                            locals: {},
+                            render: sinon.spy()
+                        };
+
+                    frontend.single(req, res, function () {
+                        res.render.called.should.be.false;
+                        done();
+                    });
+                });
+
+                it('will NOT render static page via /:author/:slug', function (done) {
+                    var req = {
+                            path: '/' + ['test', mockPosts[0].posts[0].slug].join('/')
                         },
                         res = {
                             locals: {},
@@ -680,6 +711,23 @@ describe('Frontend Controller', function () {
                         done();
                     });
                 });
+
+                it('will NOT redirect static page to admin edit page via /:author/:slug/edit', function (done) {
+                    var req = {
+                            path: '/' + ['test', mockPosts[0].posts[0].slug, 'edit'].join('/')
+                        },
+                        res = {
+                            locals: {},
+                            render: sinon.spy(),
+                            redirect: sinon.spy()
+                        };
+
+                    frontend.single(req, res, function () {
+                        res.render.called.should.be.false;
+                        res.redirect.called.should.be.false;
+                        done();
+                    });
+                });
             });
 
             describe('permalink set to date', function () {
@@ -702,8 +750,8 @@ describe('Frontend Controller', function () {
                         res = {
                             locals: {},
                             render: function (view, context) {
-                                assert.equal(view, 'page');
-                                assert.equal(context.post, mockPosts[0].posts[0]);
+                                view.should.equal('page');
+                                context.post.should.equal(mockPosts[0].posts[0]);
                                 done();
                             }
                         };
@@ -782,10 +830,10 @@ describe('Frontend Controller', function () {
                         res = {
                             locals: {},
                             render: function (view, context) {
-                                assert.equal(view, 'post');
-                                assert(context.post, 'Context object has post attribute');
-                                assert.equal(context.post, mockPosts[1].posts[0]);
-                                assert.equal(context.post.author.email, undefined);
+                                view.should.equal('post');
+                                context.post.should.exist;
+                                context.post.should.equal(mockPosts[1].posts[0]);
+                                should.not.exist(context.post.author.email);
                                 done();
                             }
                         };
@@ -796,6 +844,21 @@ describe('Frontend Controller', function () {
                 it('will NOT render post via /YYYY/MM/DD/:slug', function (done) {
                     var req = {
                             path: '/' + ['2012/12/30', mockPosts[1].posts[0].slug].join('/')
+                        },
+                        res = {
+                            locals: {},
+                            render: sinon.spy()
+                        };
+
+                    frontend.single(req, res, function () {
+                        res.render.called.should.be.false;
+                        done();
+                    });
+                });
+
+                it('will NOT render post via /:author/:slug', function (done) {
+                    var req = {
+                            path: '/' + ['test', mockPosts[1].posts[0].slug].join('/')
                         },
                         res = {
                             locals: {},
@@ -842,6 +905,23 @@ describe('Frontend Controller', function () {
                         done();
                     });
                 });
+
+                it('will NOT redirect post to admin edit page via /:author/:slug/edit', function (done) {
+                    var req = {
+                            path: '/' + ['test', mockPosts[1].posts[0].slug, 'edit'].join('/')
+                        },
+                        res = {
+                            locals: {},
+                            render: sinon.spy(),
+                            redirect: sinon.spy()
+                        };
+
+                    frontend.single(req, res, function () {
+                        res.render.called.should.be.false;
+                        res.redirect.called.should.be.false;
+                        done();
+                    });
+                });
             });
 
             describe('permalink set to date', function () {
@@ -865,10 +945,10 @@ describe('Frontend Controller', function () {
                         res = {
                             locals: {},
                             render: function (view, context) {
-                                assert.equal(view, 'post');
-                                assert(context.post, 'Context object has post attribute');
-                                assert.equal(context.post, mockPosts[1].posts[0]);
-                                assert.equal(context.post.author.email, undefined);
+                                view.should.equal('post');
+                                context.post.should.exist;
+                                context.post.should.equal(mockPosts[1].posts[0]);
+                                should.not.exist(context.post.author.email);
                                 done();
                             }
                         };
@@ -877,7 +957,7 @@ describe('Frontend Controller', function () {
                 });
 
                 it('will NOT render post via /YYYY/MM/DD/:slug with non-matching date in url', function (done) {
-                    var date = moment(mockPosts[1].published_at).subtract('days', 1).format('YYYY/MM/DD'),
+                    var date = moment(mockPosts[1].published_at).subtract(1, 'days').format('YYYY/MM/DD'),
                         req = {
                             path: '/' + [date, mockPosts[1].posts[0].slug].join('/')
                         },
@@ -895,6 +975,21 @@ describe('Frontend Controller', function () {
                 it('will NOT render post via /:slug', function (done) {
                     var req = {
                             path: '/' + mockPosts[1].posts[0].slug
+                        },
+                        res = {
+                            locals: {},
+                            render: sinon.spy()
+                        };
+
+                    frontend.single(req, res, function () {
+                        res.render.called.should.be.false;
+                        done();
+                    });
+                });
+
+                it('will NOT render post via /:author/:slug', function (done) {
+                    var req = {
+                            path: '/' + ['test', mockPosts[1].posts[0].slug].join('/')
                         },
                         res = {
                             locals: {},
@@ -942,6 +1037,154 @@ describe('Frontend Controller', function () {
                         done();
                     });
                 });
+
+                it('will NOT redirect post to admin edit page via /:author/:slug/edit', function (done) {
+                    var req = {
+                            path: '/' + ['test', mockPosts[1].posts[0].slug, 'edit'].join('/')
+                        },
+                        res = {
+                            locals: {},
+                            render: sinon.spy(),
+                            redirect: sinon.spy()
+                        };
+
+                    frontend.single(req, res, function () {
+                        res.render.called.should.be.false;
+                        res.redirect.called.should.be.false;
+                        done();
+                    });
+                });
+            });
+
+            describe('permalink set to author', function () {
+                beforeEach(function () {
+                    apiSettingsStub.withArgs('permalinks').returns(Promise.resolve({
+                        settings: [{
+                            value: '/:author/:slug'
+                        }]
+                    }));
+                });
+
+                it('will render post via /:author/:slug', function (done) {
+                    var req = {
+                            path: '/' + ['test', mockPosts[1].posts[0].slug].join('/'),
+                            route: {
+                                path: '*'
+                            },
+                            params: {}
+                        },
+                        res = {
+                            locals: {},
+                            render: function (view, context) {
+                                view.should.equal('post');
+                                should.exist(context.post);
+                                context.post.should.equal(mockPosts[1].posts[0]);
+                                should.not.exist(context.post.author.email);
+                                done();
+                            }
+                        };
+
+                    frontend.single(req, res, failTest(done));
+                });
+
+                it('will NOT render post via /YYYY/MM/DD/:slug', function (done) {
+                    var date = moment(mockPosts[1].posts[0].published_at).format('YYYY/MM/DD'),
+                        req = {
+                            path: '/' + [date, mockPosts[1].posts[0].slug].join('/')
+                        },
+                        res = {
+                            locals: {},
+                            render: sinon.spy()
+                        };
+
+                    frontend.single(req, res, function () {
+                        res.render.called.should.be.false;
+                        done();
+                    });
+                });
+
+                it('will NOT render post via /:author/:slug when author does not match post author', function (done) {
+                    var req = {
+                            path: '/' + ['test-2', mockPosts[1].posts[0].slug].join('/')
+                        },
+                        res = {
+                            locals: {},
+                            render: sinon.spy()
+                        };
+
+                    frontend.single(req, res, function () {
+                        res.render.called.should.be.false;
+                        done();
+                    });
+                });
+
+                it('will NOT render post via /:slug', function (done) {
+                    var req = {
+                            path: '/' + mockPosts[1].posts[0].slug
+                        },
+                        res = {
+                            locals: {},
+                            render: sinon.spy()
+                        };
+
+                    frontend.single(req, res, function () {
+                        res.render.called.should.be.false;
+                        done();
+                    });
+                });
+
+                // Handle Edit append
+                it('will redirect post to admin edit page via /:author/:slug/edit', function (done) {
+                    var req = {
+                            path: '/' + ['test', mockPosts[1].posts[0].slug, 'edit'].join('/')
+                        },
+                        res = {
+                            locals: {},
+                            render: sinon.spy(),
+                            redirect: function (arg) {
+                                res.render.called.should.be.false;
+                                arg.should.eql(adminEditPagePath + mockPosts[1].posts[0].id + '/');
+                                done();
+                            }
+                        };
+
+                    frontend.single(req, res, failTest(done));
+                });
+
+                it('will NOT redirect post to admin edit page via /YYYY/MM/DD/:slug/edit', function (done) {
+                    var date = moment(mockPosts[1].posts[0].published_at).format('YYYY/MM/DD'),
+                        req = {
+                            path: '/' + [date, mockPosts[1].posts[0].slug, 'edit'].join('/')
+                        },
+                        res = {
+                            locals: {},
+                            render: sinon.spy(),
+                            redirect: sinon.spy()
+                        };
+
+                    frontend.single(req, res, function () {
+                        res.render.called.should.be.false;
+                        res.redirect.called.should.be.false;
+                        done();
+                    });
+                });
+
+                it('will NOT redirect post to admin edit page /:slug/edit', function (done) {
+                    var req = {
+                            path: '/' + [mockPosts[1].posts[0].slug, 'edit'].join('/')
+                        },
+                        res = {
+                            locals: {},
+                            render: sinon.spy(),
+                            redirect: sinon.spy()
+                        };
+
+                    frontend.single(req, res, function () {
+                        res.render.called.should.be.false;
+                        res.redirect.called.should.be.false;
+                        done();
+                    });
+                });
             });
 
             describe('permalink set to custom format', function () {
@@ -965,10 +1208,10 @@ describe('Frontend Controller', function () {
                         res = {
                             locals: {},
                             render: function (view, context) {
-                                assert.equal(view, 'post');
-                                assert(context.post, 'Context object has post attribute');
-                                assert.equal(context.post, mockPosts[1].posts[0]);
-                                assert.equal(context.post.author.email, undefined);
+                                view.should.equal('post');
+                                should.exist(context.post);
+                                context.post.should.equal(mockPosts[1].posts[0]);
+                                should.not.exist(context.post.author.email);
                                 done();
                             }
                         };
@@ -993,7 +1236,7 @@ describe('Frontend Controller', function () {
                 });
 
                 it('will NOT render post via /:year/slug when year does not match post year', function (done) {
-                    var date = moment(mockPosts[1].posts[0].published_at).subtract('years', 1).format('YYYY'),
+                    var date = moment(mockPosts[1].posts[0].published_at).subtract(1, 'years').format('YYYY'),
                         req = {
                             path: '/' + [date, mockPosts[1].posts[0].slug].join('/')
                         },
@@ -1064,11 +1307,7 @@ describe('Frontend Controller', function () {
 
     describe('rss redirects', function () {
         var res,
-            apiUsersStub,
-            overwriteConfig = function (newConfig) {
-                var existingConfig = frontend.__get__('config');
-                config.set(_.extend(existingConfig, newConfig));
-            };
+            apiUsersStub;
 
         beforeEach(function () {
             res = {
@@ -1135,7 +1374,7 @@ describe('Frontend Controller', function () {
         });
 
         it('Redirects to home if page number is 0 with subdirectory', function () {
-            overwriteConfig({paths: {subdir: '/blog'}});
+            config.set({url: 'http://testurl.com/blog'});
 
             var req = {params: {page: 0}, route: {path: '/rss/:page/'}};
 
@@ -1147,7 +1386,7 @@ describe('Frontend Controller', function () {
         });
 
         it('Redirects to home if page number is 1 with subdirectory', function () {
-            overwriteConfig({paths: {subdir: '/blog'}});
+            config.set({url: 'http://testurl.com/blog'});
 
             var req = {params: {page: 1}, route: {path: '/rss/:page/'}};
 
@@ -1159,7 +1398,7 @@ describe('Frontend Controller', function () {
         });
 
         it('Redirects to last page if page number too big', function (done) {
-            overwriteConfig({paths: {subdir: ''}});
+            config.set({url: 'http://testurl.com/'});
 
             var req = {params: {page: 4}, route: {path: '/rss/:page/'}};
 
@@ -1172,7 +1411,7 @@ describe('Frontend Controller', function () {
         });
 
         it('Redirects to last page if page number too big with subdirectory', function (done) {
-            overwriteConfig({paths: {subdir: '/blog'}});
+            config.set({url: 'http://testurl.com/blog'});
 
             var req = {params: {page: 4}, route: {path: '/rss/:page/'}};
 
