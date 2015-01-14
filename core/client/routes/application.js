@@ -1,7 +1,16 @@
 /* global key */
 import ShortcutsRoute from 'ghost/mixins/shortcuts-route';
+import ctrlOrCmd from 'ghost/utils/ctrl-or-cmd';
 
-var ApplicationRoute = Ember.Route.extend(SimpleAuth.ApplicationRouteMixin, ShortcutsRoute, {
+var ApplicationRoute,
+    shortcuts = {};
+
+shortcuts.esc = {action: 'closePopups', scope: 'all'};
+shortcuts.enter = {action: 'confirmModal', scope: 'modal'};
+shortcuts[ctrlOrCmd + '+s'] = {action: 'save', scope: 'all'};
+
+ApplicationRoute = Ember.Route.extend(SimpleAuth.ApplicationRouteMixin, ShortcutsRoute, {
+    shortcuts: shortcuts,
 
     afterModel: function (model, transition) {
         if (this.get('session').isAuthenticated) {
@@ -9,33 +18,25 @@ var ApplicationRoute = Ember.Route.extend(SimpleAuth.ApplicationRouteMixin, Shor
         }
     },
 
-    shortcuts: {
-        'esc': {action: 'closePopups', scope: 'all'},
-        'enter': {action: 'confirmModal', scope: 'modal'}
+    title: function (tokens) {
+        return tokens.join(' - ') + ' - ' + this.get('config.blogTitle');
     },
 
     actions: {
-        authorizationFailed: function () {
-            var currentRoute = this.get('controller').get('currentRouteName');
-
-            if (currentRoute.split('.')[0] === 'editor') {
-                this.send('openModal', 'auth-failed-unsaved', this.controllerFor(currentRoute));
-
-                return;
-            }
-
-            this._super();
-        },
-
         toggleGlobalMobileNav: function () {
             this.toggleProperty('controller.showGlobalMobileNav');
         },
 
-        toggleSettingsMenu: function () {
-            this.toggleProperty('controller.showSettingsMenu');
+        openSettingsMenu: function () {
+            this.set('controller.showSettingsMenu', true);
         },
+
         closeSettingsMenu: function () {
             this.set('controller.showSettingsMenu', false);
+        },
+
+        toggleSettingsMenu: function () {
+            this.toggleProperty('controller.showSettingsMenu');
         },
 
         closePopups: function () {
@@ -62,7 +63,13 @@ var ApplicationRoute = Ember.Route.extend(SimpleAuth.ApplicationRouteMixin, Shor
         },
 
         sessionAuthenticationSucceeded: function () {
-            var self = this;
+            var appController = this.controllerFor('application'),
+                self = this;
+
+            if (appController && appController.get('skipAuthSuccessHandler')) {
+                return;
+            }
+
             this.store.find('user', 'me').then(function (user) {
                 self.send('signedIn', user);
                 var attemptedTransition = self.get('session').get('attemptedTransition');
@@ -84,6 +91,7 @@ var ApplicationRoute = Ember.Route.extend(SimpleAuth.ApplicationRouteMixin, Shor
             key.setScope('modal');
             modalName = 'modals/' + modalName;
             this.set('modalName', modalName);
+
             // We don't always require a modal to have a controller
             // so we're skipping asserting if one exists
             if (this.controllerFor(modalName, true)) {
@@ -101,9 +109,11 @@ var ApplicationRoute = Ember.Route.extend(SimpleAuth.ApplicationRouteMixin, Shor
             });
         },
 
-        confirmModal : function () {
+        confirmModal: function () {
             var modalName = this.get('modalName');
+
             this.send('closeModal');
+
             if (this.controllerFor(modalName, true)) {
                 this.controllerFor(modalName).send('confirmAccept');
             }
@@ -114,11 +124,13 @@ var ApplicationRoute = Ember.Route.extend(SimpleAuth.ApplicationRouteMixin, Shor
                 outlet: 'modal',
                 parentView: 'application'
             });
+
             key.setScope('default');
         },
 
         loadServerNotifications: function (isDelayed) {
             var self = this;
+
             if (this.session.isAuthenticated) {
                 this.store.findAll('notification').then(function (serverNotifications) {
                     serverNotifications.forEach(function (notification) {
@@ -130,6 +142,7 @@ var ApplicationRoute = Ember.Route.extend(SimpleAuth.ApplicationRouteMixin, Shor
 
         handleErrors: function (errors) {
             var self = this;
+
             this.notifications.clear();
             errors.forEach(function (errorObj) {
                 self.notifications.showError(errorObj.message || errorObj);
@@ -138,7 +151,10 @@ var ApplicationRoute = Ember.Route.extend(SimpleAuth.ApplicationRouteMixin, Shor
                     errorObj.el.addClass('input-error');
                 }
             });
-        }
+        },
+
+        // noop default for unhandled save (used from shortcuts)
+        save: Ember.K
     }
 });
 

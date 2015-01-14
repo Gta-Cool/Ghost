@@ -1,12 +1,14 @@
 import SlugGenerator from 'ghost/models/slug-generator';
+import isNumber from 'ghost/utils/isNumber';
+import boundOneWay from 'ghost/utils/bound-one-way';
 
-var SettingsUserController = Ember.ObjectController.extend({
+var SettingsUserController = Ember.Controller.extend({
 
     user: Ember.computed.alias('model'),
 
-    email: Ember.computed.readOnly('user.email'),
+    email: Ember.computed.readOnly('model.email'),
 
-    slugValue: Ember.computed.oneWay('user.slug'),
+    slugValue: boundOneWay('model.slug'),
 
     lastPromise: null,
 
@@ -20,9 +22,11 @@ var SettingsUserController = Ember.ObjectController.extend({
 
     cover: Ember.computed('user.cover', 'coverDefault', function () {
         var cover = this.get('user.cover');
+
         if (Ember.isBlank(cover)) {
             cover = this.get('coverDefault');
         }
+
         return 'background-image: url(' + cover + ')';
     }),
 
@@ -31,7 +35,7 @@ var SettingsUserController = Ember.ObjectController.extend({
     }),
 
     image: Ember.computed('imageUrl', function () {
-        return  'background-image: url(' + this.get('imageUrl') + ')';
+        return 'background-image: url(' + this.get('imageUrl') + ')';
     }),
 
     imageUrl: Ember.computed('user.image', function () {
@@ -50,7 +54,7 @@ var SettingsUserController = Ember.ObjectController.extend({
         return createdAt ? createdAt.fromNow() : '';
     }),
 
-    //Lazy load the slug generator for slugPlaceholder
+    // Lazy load the slug generator for slugPlaceholder
     slugGenerator: Ember.computed(function () {
         return SlugGenerator.create({
             ghostPaths: this.get('ghostPaths'),
@@ -62,14 +66,15 @@ var SettingsUserController = Ember.ObjectController.extend({
         changeRole: function (newRole) {
             this.set('model.role', newRole);
         },
+
         revoke: function () {
             var self = this,
                 model = this.get('model'),
                 email = this.get('email');
 
-            //reload the model to get the most up-to-date user information
+            // reload the model to get the most up-to-date user information
             model.reload().then(function () {
-                if (self.get('invited')) {
+                if (model.get('invited')) {
                     model.destroyRecord().then(function () {
                         var notificationText = 'Invitation revoked. (' + email + ')';
                         self.notifications.showSuccess(notificationText, false);
@@ -77,7 +82,7 @@ var SettingsUserController = Ember.ObjectController.extend({
                         self.notifications.showAPIError(error);
                     });
                 } else {
-                    //if the user is no longer marked as "invited", then show a warning and reload the route
+                    // if the user is no longer marked as "invited", then show a warning and reload the route
                     self.get('target').send('reload');
                     self.notifications.showError('This user has already accepted the invitation.', {delayed: 500});
                 }
@@ -116,7 +121,7 @@ var SettingsUserController = Ember.ObjectController.extend({
             }
 
             promise = Ember.RSVP.resolve(afterUpdateSlug).then(function () {
-                return user.save({ format: false });
+                return user.save({format: false});
             }).then(function (model) {
                 var currentPath,
                     newPath;
@@ -132,7 +137,7 @@ var SettingsUserController = Ember.ObjectController.extend({
                     newPath[newPath.length - 2] = model.get('slug');
                     newPath = newPath.join('/');
 
-                    window.history.replaceState({ path: newPath }, '', newPath);
+                    window.history.replaceState({path: newPath}, '', newPath);
                 }
 
                 return model;
@@ -149,12 +154,11 @@ var SettingsUserController = Ember.ObjectController.extend({
 
             if (user.get('isPasswordValid')) {
                 user.saveNewPassword().then(function (model) {
-
                     // Clear properties from view
                     user.setProperties({
-                        'password': '',
-                        'newPassword': '',
-                        'ne2Password': ''
+                        password: '',
+                        newPassword: '',
+                        ne2Password: ''
                     });
 
                     self.notifications.showSuccess('Password updated.');
@@ -174,7 +178,7 @@ var SettingsUserController = Ember.ObjectController.extend({
                 promise;
 
             promise = Ember.RSVP.resolve(afterSave).then(function () {
-                var slug = self.get('slug');
+                var slug = self.get('model.slug');
 
                 newSlug = newSlug || slug;
 
@@ -188,7 +192,6 @@ var SettingsUserController = Ember.ObjectController.extend({
                 }
 
                 return self.get('slugGenerator').generateSlug(newSlug).then(function (serverSlug) {
-
                     // If after getting the sanitized and unique slug back from the API
                     // we end up with a slug that matches the existing slug, abort the change
                     if (serverSlug === slug) {
@@ -207,7 +210,7 @@ var SettingsUserController = Ember.ObjectController.extend({
 
                     // if the candidate slug is the same as the existing slug except
                     // for the incrementor then the existing slug should be used
-                    if (_.isNumber(check) && check > 0) {
+                    if (isNumber(check) && check > 0) {
                         if (slug === slugTokens.join('-') && serverSlug !== newSlug) {
                             self.set('slugValue', slug);
 

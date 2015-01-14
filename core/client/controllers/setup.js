@@ -1,7 +1,7 @@
 import ajax from 'ghost/utils/ajax';
 import ValidationEngine from 'ghost/mixins/validation-engine';
 
-var SetupController = Ember.ObjectController.extend(ValidationEngine, {
+var SetupController = Ember.Controller.extend(ValidationEngine, {
     blogTitle: null,
     name: null,
     email: null,
@@ -19,7 +19,7 @@ var SetupController = Ember.ObjectController.extend(ValidationEngine, {
             self.notifications.closePassive();
 
             this.toggleProperty('submitting');
-            this.validate({ format: false }).then(function () {
+            this.validate({format: false}).then(function () {
                 ajax({
                     url: self.get('ghostPaths.url').api('authentication', 'setup'),
                     type: 'POST',
