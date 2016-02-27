@@ -1,7 +1,7 @@
 /*globals describe, before, beforeEach, afterEach, it */
-/*jshint expr:true*/
 var testUtils = require('../../utils'),
     should    = require('should'),
+    _         = require('lodash'),
 
     // Stuff we are testing
     dbAPI          = require('../../../server/api/db'),
@@ -20,7 +20,7 @@ describe('DB API', function () {
         return dbAPI.deleteAllContent(testUtils.context.owner).then(function (result) {
             should.exist(result.db);
             result.db.should.be.instanceof(Array);
-            result.db.should.be.empty;
+            result.db.should.be.empty();
         }).then(function () {
             return ModelTag.Tag.findAll(testUtils.context.owner).then(function (results) {
                 should.exist(results);
@@ -39,7 +39,7 @@ describe('DB API', function () {
         return dbAPI.deleteAllContent(testUtils.context.admin).then(function (result) {
             should.exist(result.db);
             result.db.should.be.instanceof(Array);
-            result.db.should.be.empty;
+            result.db.should.be.empty();
         }).then(function () {
             return ModelTag.Tag.findAll(testUtils.context.admin).then(function (results) {
                 should.exist(results);
@@ -54,59 +54,84 @@ describe('DB API', function () {
         }).catch(done);
     });
 
-    it('delete all content is denied (editor & author)', function (done) {
+    it('delete all content is denied (editor, author & without authentication)', function (done) {
         return dbAPI.deleteAllContent(testUtils.context.editor).then(function () {
             done(new Error('Delete all content is not denied for editor.'));
         }, function (error) {
-            error.type.should.eql('NoPermissionError');
+            error.errorType.should.eql('NoPermissionError');
             return dbAPI.deleteAllContent(testUtils.context.author);
         }).then(function () {
             done(new Error('Delete all content is not denied for author.'));
         }, function (error) {
-            error.type.should.eql('NoPermissionError');
+            error.errorType.should.eql('NoPermissionError');
             return dbAPI.deleteAllContent();
         }).then(function () {
             done(new Error('Delete all content is not denied without authentication.'));
         }).catch(function (error) {
-            error.type.should.eql('NoPermissionError');
+            error.errorType.should.eql('NoPermissionError');
             done();
         }).catch(done);
     });
 
-    it('export content is denied (editor & author)', function (done) {
+    it('export content is denied (editor, author & without authentication)', function (done) {
         return dbAPI.exportContent(testUtils.context.editor).then(function () {
             done(new Error('Export content is not denied for editor.'));
         }, function (error) {
-            error.type.should.eql('NoPermissionError');
+            error.errorType.should.eql('NoPermissionError');
             return dbAPI.exportContent(testUtils.context.author);
         }).then(function () {
             done(new Error('Export content is not denied for author.'));
         }, function (error) {
-            error.type.should.eql('NoPermissionError');
+            error.errorType.should.eql('NoPermissionError');
             return dbAPI.exportContent();
         }).then(function () {
             done(new Error('Export content is not denied without authentication.'));
         }).catch(function (error) {
-            error.type.should.eql('NoPermissionError');
+            error.errorType.should.eql('NoPermissionError');
             done();
         }).catch(done);
     });
 
-    it('import content is denied (editor & author)', function (done) {
-        return dbAPI.importContent(testUtils.context.editor).then(function () {
+    it('import content is denied (editor, author & without authentication)', function (done) {
+        var file = {importfile: {
+            name: 'myFile.json',
+            path: '/my/path/myFile.json',
+            type: 'application/json'
+        }};
+
+        return dbAPI.importContent(_.extend(testUtils.context.editor, file)).then(function () {
             done(new Error('Import content is not denied for editor.'));
         }, function (error) {
-            error.type.should.eql('NoPermissionError');
-            return dbAPI.importContent(testUtils.context.author);
+            error.errorType.should.eql('NoPermissionError');
+            return dbAPI.importContent(_.extend(testUtils.context.author, file));
         }).then(function () {
             done(new Error('Import content is not denied for author.'));
         }, function (error) {
-            error.type.should.eql('NoPermissionError');
-            return dbAPI.importContent();
+            error.errorType.should.eql('NoPermissionError');
+            return dbAPI.importContent(file);
         }).then(function () {
             done(new Error('Import content is not denied without authentication.'));
         }).catch(function (error) {
-            error.type.should.eql('NoPermissionError');
+            error.errorType.should.eql('NoPermissionError');
+            done();
+        }).catch(done);
+    });
+
+    it('import content should fail without file & with unsupported file', function (done) {
+        return dbAPI.importContent(testUtils.context.admin).then(function () {
+            done(new Error('Import content is not failed without file.'));
+        }, function (error) {
+            error.errorType.should.eql('ValidationError');
+
+            var context = _.extend(testUtils.context.admin, {
+                importfile: {name: 'myFile.docx', path: '/my/path/myFile.docx', type: 'application/docx'}
+            });
+
+            return dbAPI.importContent(context);
+        }).then(function () {
+            done(new Error('Import content is not failed with unsupported.'));
+        }, function (error) {
+            error.errorType.should.eql('UnsupportedMediaTypeError');
             done();
         }).catch(done);
     });

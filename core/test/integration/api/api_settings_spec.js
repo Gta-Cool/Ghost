@@ -1,5 +1,4 @@
 /*globals describe, before, beforeEach, afterEach, it */
-/*jshint expr:true*/
 var testUtils           = require('../../utils'),
     should              = require('should'),
     _                   = require('lodash'),
@@ -107,7 +106,7 @@ describe('Settings API', function () {
             done(new Error('Allowed to read databaseVersion with external request'));
         }).catch(function (error) {
             should.exist(error);
-            error.type.should.eql('NoPermissionError');
+            error.errorType.should.eql('NoPermissionError');
             done();
         }).catch(done);
     });
@@ -153,7 +152,7 @@ describe('Settings API', function () {
             }).catch(function (err) {
                 should.exist(err);
 
-                err.type.should.eql('NoPermissionError');
+                err.errorType.should.eql('NoPermissionError');
 
                 done();
             }).catch(done);
@@ -191,7 +190,7 @@ describe('Settings API', function () {
         }).catch(function (err) {
             should.exist(err);
 
-            err.type.should.eql('ValidationError');
+            err.errorType.should.eql('ValidationError');
 
             done();
         }).catch(done);
