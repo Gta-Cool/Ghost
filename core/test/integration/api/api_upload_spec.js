@@ -1,5 +1,4 @@
 /*globals describe, beforeEach, afterEach, it*/
-/*jshint expr:true*/
 var fs          = require('fs-extra'),
     should      = require('should'),
     sinon       = require('sinon'),
@@ -9,9 +8,6 @@ var fs          = require('fs-extra'),
     // Stuff we are testing
     UploadAPI   = require('../../../server/api/upload'),
     store;
-
-// To stop jshint complaining
-should.equal(true, true);
 
 describe('Upload API', function () {
     // Doesn't test the DB
@@ -42,8 +38,8 @@ describe('Upload API', function () {
             UploadAPI.add({uploadimage: uploadimage}).then(function () {
                 done(new Error('Upload suceeded with invalid file.'));
             }, function (result) {
-                result.code.should.equal(415);
-                result.type.should.equal('UnsupportedMediaTypeError');
+                result.statusCode.should.equal(415);
+                result.errorType.should.equal('UnsupportedMediaTypeError');
                 done();
             });
         });
@@ -59,8 +55,8 @@ describe('Upload API', function () {
             UploadAPI.add({uploadimage: uploadimage}).then(function () {
                 done(new Error('Upload suceeded with invalid file.'));
             }, function (result) {
-                result.code.should.equal(415);
-                result.type.should.equal('UnsupportedMediaTypeError');
+                result.statusCode.should.equal(415);
+                result.errorType.should.equal('UnsupportedMediaTypeError');
                 done();
             });
         });
@@ -88,8 +84,8 @@ describe('Upload API', function () {
             UploadAPI.add({uploadimage: uploadimage}).then(function () {
                 done(new Error('Upload suceeded with invalid file.'));
             }, function (result) {
-                result.code.should.equal(415);
-                result.type.should.equal('UnsupportedMediaTypeError');
+                result.statusCode.should.equal(415);
+                result.errorType.should.equal('UnsupportedMediaTypeError');
                 done();
             });
         });

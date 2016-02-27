@@ -1,14 +1,17 @@
 var Promise       = require('bluebird'),
-    sequence      = require('../../server/utils/sequence'),
     _             = require('lodash'),
     fs            = require('fs-extra'),
     path          = require('path'),
+    uuid          = require('node-uuid'),
+    db            = require('../../server/data/db'),
     migration     = require('../../server/data/migration/'),
     Models        = require('../../server/models'),
     SettingsAPI   = require('../../server/api/settings'),
     permissions   = require('../../server/permissions'),
-    permsFixtures = require('../../server/data/fixtures/permissions/permissions.json'),
+    permsFixtures = require('../../server/data/migration/fixtures/permissions/permissions.json'),
+    sequence      = require('../../server/utils/sequence'),
     DataGenerator = require('./fixtures/data-generator'),
+    filterData    = require('./fixtures/filter-param'),
     API           = require('./api'),
     fork          = require('./fork'),
     config        = require('../../server/config'),
@@ -31,18 +34,16 @@ var Promise       = require('bluebird'),
 /** TEST FIXTURES **/
 fixtures = {
     insertPosts: function insertPosts() {
-        var knex = config.database.knex;
-        return Promise.resolve(knex('posts').insert(DataGenerator.forKnex.posts)).then(function () {
-            return knex('tags').insert(DataGenerator.forKnex.tags);
+        return Promise.resolve(db.knex('posts').insert(DataGenerator.forKnex.posts)).then(function () {
+            return db.knex('tags').insert(DataGenerator.forKnex.tags);
         }).then(function () {
-            return knex('posts_tags').insert(DataGenerator.forKnex.posts_tags);
+            return db.knex('posts_tags').insert(DataGenerator.forKnex.posts_tags);
         });
     },
 
     insertMultiAuthorPosts: function insertMultiAuthorPosts(max) {
         /*jshint unused:false*/
-        var knex = config.database.knex,
-            author,
+        var author,
             authors,
             i, j, k = postsInserted,
             posts = [];
@@ -51,9 +52,9 @@ fixtures = {
         // insert users of different roles
         return Promise.resolve(fixtures.createUsersWithRoles()).then(function () {
             // create the tags
-            return knex('tags').insert(DataGenerator.forKnex.tags);
+            return db.knex('tags').insert(DataGenerator.forKnex.tags);
         }).then(function () {
-            return knex('users').select('id');
+            return db.knex('users').select('id');
         }).then(function (results) {
             authors = _.pluck(results, 'id');
 
@@ -69,14 +70,14 @@ fixtures = {
 
             return sequence(_.times(posts.length, function (index) {
                 return function () {
-                    return knex('posts').insert(posts[index]);
+                    return db.knex('posts').insert(posts[index]);
                 };
             }));
         }).then(function () {
             return Promise.all([
                 // PostgreSQL can return results in any order
-                knex('posts').orderBy('id', 'asc').select('id'),
-                knex('tags').select('id')
+                db.knex('posts').orderBy('id', 'asc').select('id'),
+                db.knex('tags').select('id')
             ]);
         }).then(function (results) {
             var posts = _.pluck(results[0], 'id'),
@@ -94,7 +95,7 @@ fixtures = {
 
             return sequence(_.times(promises.length, function (index) {
                 return function () {
-                    return knex('posts_tags').insert(promises[index]);
+                    return db.knex('posts_tags').insert(promises[index]);
                 };
             }));
         });
@@ -104,8 +105,7 @@ fixtures = {
         var lang,
             status,
             posts = [],
-            i, j, k = postsInserted,
-            knex = config.database.knex;
+            i, j, k = postsInserted;
 
         max = max || 50;
 
@@ -126,7 +126,25 @@ fixtures = {
 
         return sequence(_.times(posts.length, function (index) {
             return function () {
-                return knex('posts').insert(posts[index]);
+                return db.knex('posts').insert(posts[index]);
+            };
+        }));
+    },
+
+    insertMoreTags: function insertMoreTags(max) {
+        max = max || 50;
+        var tags = [],
+            tagName,
+            i;
+
+        for (i = 0; i < max; i += 1) {
+            tagName = uuid.v4().split('-')[0];
+            tags.push(DataGenerator.forKnex.createBasic({name: tagName, slug: tagName}));
+        }
+
+        return sequence(_.times(tags.length, function (index) {
+            return function () {
+                return db.knex('tags').insert(tags[index]);
             };
         }));
     },
@@ -134,12 +152,10 @@ fixtures = {
     insertMorePostsTags: function insertMorePostsTags(max) {
         max = max || 50;
 
-        var knex = config.database.knex;
-
         return Promise.all([
             // PostgreSQL can return results in any order
-            knex('posts').orderBy('id', 'asc').select('id'),
-            knex('tags').select('id', 'name')
+            db.knex('posts').orderBy('id', 'asc').select('id'),
+            db.knex('tags').select('id', 'name')
         ]).then(function (results) {
             var posts = _.pluck(results[0], 'id'),
                 injectionTagId = _.chain(results[1])
@@ -159,65 +175,62 @@ fixtures = {
 
             return sequence(_.times(promises.length, function (index) {
                 return function () {
-                    return knex('posts_tags').insert(promises[index]);
+                    return db.knex('posts_tags').insert(promises[index]);
                 };
             }));
         });
     },
     insertRoles: function insertRoles() {
-        var knex = config.database.knex;
-        return knex('roles').insert(DataGenerator.forKnex.roles);
+        return db.knex('roles').insert(DataGenerator.forKnex.roles);
     },
 
     initOwnerUser: function initOwnerUser() {
-        var user = DataGenerator.Content.users[0],
-            knex = config.database.knex;
+        var user = DataGenerator.Content.users[0];
 
         user = DataGenerator.forKnex.createBasic(user);
         user = _.extend({}, user, {status: 'inactive'});
 
-        return knex('roles').insert(DataGenerator.forKnex.roles).then(function () {
-            return knex('users').insert(user);
+        return db.knex('roles').insert(DataGenerator.forKnex.roles).then(function () {
+            return db.knex('users').insert(user);
         }).then(function () {
-            return knex('roles_users').insert(DataGenerator.forKnex.roles_users[0]);
+            return db.knex('roles_users').insert(DataGenerator.forKnex.roles_users[0]);
         });
     },
 
     insertOwnerUser: function insertOwnerUser() {
-        var user,
-            knex = config.database.knex;
+        var user;
 
         user = DataGenerator.forKnex.createUser(DataGenerator.Content.users[0]);
 
-        return knex('users').insert(user).then(function () {
-            return knex('roles_users').insert(DataGenerator.forKnex.roles_users[0]);
+        return db.knex('users').insert(user).then(function () {
+            return db.knex('roles_users').insert(DataGenerator.forKnex.roles_users[0]);
         });
     },
 
-    overrideOwnerUser: function overrideOwnerUser() {
-        var user,
-            knex = config.database.knex;
+    overrideOwnerUser: function overrideOwnerUser(slug) {
+        var user;
 
         user = DataGenerator.forKnex.createUser(DataGenerator.Content.users[0]);
+        if (slug) {
+            user.slug = slug;
+        }
 
-        return knex('users')
+        return db.knex('users')
             .where('id', '=', '1')
             .update(user);
     },
 
     createUsersWithRoles: function createUsersWithRoles() {
-        var knex = config.database.knex;
-        return knex('roles').insert(DataGenerator.forKnex.roles).then(function () {
-            return knex('users').insert(DataGenerator.forKnex.users);
+        return db.knex('roles').insert(DataGenerator.forKnex.roles).then(function () {
+            return db.knex('users').insert(DataGenerator.forKnex.users);
         }).then(function () {
-            return knex('roles_users').insert(DataGenerator.forKnex.roles_users);
+            return db.knex('roles_users').insert(DataGenerator.forKnex.roles_users);
         });
     },
 
     createExtraUsers: function createExtraUsers() {
-        var knex = config.database.knex,
-            // grab 3 more users
-            extraUsers = DataGenerator.Content.users.slice(2, 5);
+        // grab 3 more users
+        var extraUsers = DataGenerator.Content.users.slice(2, 5);
 
         extraUsers = _.map(extraUsers, function (user) {
             return DataGenerator.forKnex.createUser(_.extend({}, user, {
@@ -226,8 +239,8 @@ fixtures = {
             }));
         });
 
-        return knex('users').insert(extraUsers).then(function () {
-            return knex('roles_users').insert([
+        return db.knex('users').insert(extraUsers).then(function () {
+            return db.knex('roles_users').insert([
                 {user_id: 5, role_id: 1},
                 {user_id: 6, role_id: 2},
                 {user_id: 7, role_id: 3}
@@ -237,18 +250,16 @@ fixtures = {
 
     // Creates a client, and access and refresh tokens for user 3 (author)
     createTokensForUser: function createTokensForUser() {
-        var knex = config.database.knex;
-        return knex('clients').insert(DataGenerator.forKnex.clients).then(function () {
-            return knex('accesstokens').insert(DataGenerator.forKnex.createToken({user_id: 3}));
+        return db.knex('clients').insert(DataGenerator.forKnex.clients).then(function () {
+            return db.knex('accesstokens').insert(DataGenerator.forKnex.createToken({user_id: 3}));
         }).then(function () {
-            return knex('refreshtokens').insert(DataGenerator.forKnex.createToken({user_id: 3}));
+            return db.knex('refreshtokens').insert(DataGenerator.forKnex.createToken({user_id: 3}));
         });
     },
 
     createInvitedUsers: function createInvitedUser() {
-        var knex = config.database.knex,
-            // grab 3 more users
-            extraUsers = DataGenerator.Content.users.slice(2, 5);
+        // grab 3 more users
+        var extraUsers = DataGenerator.Content.users.slice(2, 5);
 
         extraUsers = _.map(extraUsers, function (user) {
             return DataGenerator.forKnex.createUser(_.extend({}, user, {
@@ -258,8 +269,8 @@ fixtures = {
             }));
         });
 
-        return knex('users').insert(extraUsers).then(function () {
-            return knex('roles_users').insert([
+        return db.knex('users').insert(extraUsers).then(function () {
+            return db.knex('roles_users').insert([
                 {user_id: 8, role_id: 1},
                 {user_id: 9, role_id: 2},
                 {user_id: 10, role_id: 3}
@@ -268,15 +279,13 @@ fixtures = {
     },
 
     insertOne: function insertOne(obj, fn) {
-        var knex = config.database.knex;
-        return knex(obj)
+        return db.knex(obj)
            .insert(DataGenerator.forKnex[fn](DataGenerator.Content[obj][0]));
     },
 
     insertApps: function insertApps() {
-        var knex = config.database.knex;
-        return knex('apps').insert(DataGenerator.forKnex.apps).then(function () {
-            return knex('app_fields').insert(DataGenerator.forKnex.app_fields);
+        return db.knex('apps').insert(DataGenerator.forKnex.apps).then(function () {
+            return db.knex('app_fields').insert(DataGenerator.forKnex.app_fields);
         });
     },
 
@@ -307,8 +316,7 @@ fixtures = {
     },
 
     permissionsFor: function permissionsFor(obj) {
-        var knex = config.database.knex,
-            permsToInsert = permsFixtures.permissions[obj],
+        var permsToInsert = permsFixtures.permissions[obj],
             permsRolesToInsert = permsFixtures.permissions_roles,
             actions = [],
             permissionsRoles = [],
@@ -339,9 +347,15 @@ fixtures = {
             }
         });
 
-        return knex('permissions').insert(permsToInsert).then(function () {
-            return knex('permissions_roles').insert(permissionsRoles);
+        return db.knex('permissions').insert(permsToInsert).then(function () {
+            return db.knex('permissions_roles').insert(permissionsRoles);
         });
+    },
+    insertClients: function insertClients() {
+        return db.knex('clients').insert(DataGenerator.forKnex.clients);
+    },
+    insertAccessToken: function insertAccessToken(override) {
+        return db.knex('accesstokens').insert(DataGenerator.forKnex.createToken(override));
     }
 };
 
@@ -376,6 +390,7 @@ toDoList = {
 
     posts: function insertPosts() { return fixtures.insertPosts(); },
     'posts:mu': function insertMultiAuthorPosts() { return fixtures.insertMultiAuthorPosts(); },
+    tags: function insertMoreTags() { return fixtures.insertMoreTags(); },
     apps: function insertApps() { return fixtures.insertApps(); },
     settings: function populateSettings() {
         return Models.Settings.populateDefaults().then(function () { return SettingsAPI.updateSettingsCache(); });
@@ -389,7 +404,9 @@ toDoList = {
     'perms:init': function initPermissions() { return permissions.init(); },
     perms: function permissionsFor(obj) {
         return function permissionsForObj() { return fixtures.permissionsFor(obj); };
-    }
+    },
+    clients: function insertClients() { return fixtures.insertClients(); },
+    filter: function createFilterParamFixtures() { return filterData(DataGenerator); }
 };
 
 /**
@@ -478,7 +495,9 @@ doAuth = function doAuth() {
     delete options[0];
     // No DB setup, but override the owner
     options = _.merge({'owner:post': true}, _.transform(options, function (result, val) {
-        result[val] = true;
+        if (val) {
+            result[val] = true;
+        }
     }));
 
     fixtureOps = getFixtureOps(options);
@@ -493,14 +512,16 @@ login = function login(request) {
 
     return new Promise(function (resolve, reject) {
         request.post('/ghost/api/v0.1/authentication/token/')
-            .send({grant_type: 'password', username: user.email, password: user.password, client_id: 'ghost-admin'})
-            .end(function (err, res) {
-                if (err) {
-                    return reject(err);
-                }
-
+            .set('Origin', config.url)
+            .send({
+                grant_type: 'password',
+                username: user.email,
+                password: user.password,
+                client_id: 'ghost-admin',
+                client_secret: 'not_available'
+            }).then(function then(res) {
                 resolve(res.body.access_token);
-            });
+            }, reject);
     });
 };
 
