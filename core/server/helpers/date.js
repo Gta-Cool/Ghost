@@ -25,7 +25,7 @@ date = function (context, options) {
     var f = options.hash.format || 'MMM Do, YYYY',
         locale = options.hash.locale || config.locale,
         timeago = options.hash.timeago,
-        mdate = moment(context).lang(locale),
+        mdate = moment(context).locale(locale),
         date;
 
     if (timeago) {
