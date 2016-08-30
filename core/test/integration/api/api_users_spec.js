@@ -1,4 +1,3 @@
-/*globals describe, before, beforeEach, afterEach, it */
 var testUtils       = require('../../utils'),
     should          = require('should'),
     sinon           = require('sinon'),
@@ -147,7 +146,7 @@ describe('Users API', function () {
                 .then(function (results) {
                     should.exist(results);
 
-                    expectedUsers = _(results.users).pluck('slug').sortBy().value();
+                    expectedUsers = _(results.users).map('slug').sortBy().value();
 
                     return UserAPI.browse(_.extend({}, testUtils.context.admin, {order: 'slug asc'}));
                 })
@@ -156,7 +155,7 @@ describe('Users API', function () {
 
                     should.exist(results);
 
-                    users = _.pluck(results.users, 'slug');
+                    users = _.map(results.users, 'slug');
                     users.should.eql(expectedUsers);
                 })
                 .then(done)
@@ -170,7 +169,7 @@ describe('Users API', function () {
                 .then(function (results) {
                     should.exist(results);
 
-                    expectedUsers = _(results.users).pluck('slug').sortBy().reverse().value();
+                    expectedUsers = _(results.users).map('slug').sortBy().reverse().value();
 
                     return UserAPI.browse(_.extend({}, testUtils.context.admin, {order: 'slug desc'}));
                 })
@@ -179,7 +178,7 @@ describe('Users API', function () {
 
                     should.exist(results);
 
-                    users = _.pluck(results.users, 'slug');
+                    users = _.map(results.users, 'slug');
                     users.should.eql(expectedUsers);
                 })
                 .then(done)
@@ -205,7 +204,7 @@ describe('Users API', function () {
                 response.users[0].count.posts.should.eql(0);
                 response.users[1].count.posts.should.eql(0);
                 response.users[2].count.posts.should.eql(0);
-                response.users[3].count.posts.should.eql(7);
+                response.users[3].count.posts.should.eql(8);
                 response.users[4].count.posts.should.eql(0);
                 response.users[5].count.posts.should.eql(0);
                 response.users[6].count.posts.should.eql(0);
@@ -693,15 +692,6 @@ describe('Users API', function () {
     });
 
     describe('Destroy', function () {
-        function checkDestroyResponse(response) {
-            should.exist(response);
-            should.exist(response.users);
-            should.not.exist(response.meta);
-            response.users.should.have.length(1);
-            testUtils.API.checkResponse(response.users[0], 'user');
-            response.users[0].created_at.should.be.an.instanceof(Date);
-        }
-
         describe('Owner', function () {
             it('CANNOT destroy self', function (done) {
                 UserAPI.destroy(_.extend({}, context.owner, {id: userIdFor.owner}))
@@ -714,16 +704,16 @@ describe('Users API', function () {
                 // Admin
                 UserAPI.destroy(_.extend({}, context.owner, {id: userIdFor.admin}))
                     .then(function (response) {
-                        checkDestroyResponse(response);
+                        should.not.exist(response);
                         // Editor
                         return UserAPI.destroy(_.extend({}, context.owner, {id: userIdFor.editor}));
                     }).then(function (response) {
-                        checkDestroyResponse(response);
+                        should.not.exist(response);
 
                         // Author
                         return UserAPI.destroy(_.extend({}, context.owner, {id: userIdFor.author}));
                     }).then(function (response) {
-                        checkDestroyResponse(response);
+                        should.not.exist(response);
 
                         done();
                     }).catch(done);
@@ -742,17 +732,17 @@ describe('Users API', function () {
                 // Admin
                 UserAPI.destroy(_.extend({}, context.admin, {id: userIdFor.admin2}))
                     .then(function (response) {
-                        checkDestroyResponse(response);
+                        should.not.exist(response);
 
                         // Editor
                         return UserAPI.destroy(_.extend({}, context.admin, {id: userIdFor.editor2}));
                     }).then(function (response) {
-                        checkDestroyResponse(response);
+                        should.not.exist(response);
 
                         // Author
                         return UserAPI.destroy(_.extend({}, context.admin, {id: userIdFor.author2}));
                     }).then(function (response) {
-                        checkDestroyResponse(response);
+                        should.not.exist(response);
 
                         done();
                     }).catch(done);
@@ -784,7 +774,7 @@ describe('Users API', function () {
             it('Can destroy self', function (done) {
                 UserAPI.destroy(_.extend({}, context.editor, {id: userIdFor.editor}))
                     .then(function (response) {
-                        checkDestroyResponse(response);
+                        should.not.exist(response);
                         done();
                     }).catch(done);
             });
@@ -792,7 +782,7 @@ describe('Users API', function () {
             it('Can destroy author', function (done) {
                 UserAPI.destroy(_.extend({}, context.editor, {id: userIdFor.author}))
                     .then(function (response) {
-                        checkDestroyResponse(response);
+                        should.not.exist(response);
                         done();
                     }).catch(done);
             });
@@ -1139,6 +1129,21 @@ describe('Users API', function () {
                     oldPassword: 'wrong',
                     newPassword: 'Sl1m3rson',
                     ne2Password: 'Sl1m3rson'
+                }]
+            };
+            UserAPI.changePassword(payload, _.extend({}, context.owner, {id: userIdFor.owner}))
+                .then(function () {
+                    done(new Error('Password change is not denied.'));
+                }).catch(checkForErrorType('ValidationError', done));
+        });
+
+        it('Owner can\'t change password without old password', function (done) {
+            var payload = {
+                password: [{
+                    user_id: userIdFor.owner,
+                    oldPassword: '',
+                    newPassword: 'Sl1m3rson1',
+                    ne2Password: 'Sl1m3rson1'
                 }]
             };
             UserAPI.changePassword(payload, _.extend({}, context.owner, {id: userIdFor.owner}))
