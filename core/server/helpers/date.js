@@ -4,6 +4,7 @@
 // Formats a date using moment-timezone.js. Formats published_at by default but will also take a date as a parameter
 
 var moment          = require('moment-timezone'),
+    config          = require('../config'),
     date,
     timezone;
 
@@ -24,13 +25,16 @@ date = function (date, options) {
     date = date === null ? undefined : date;
 
     var f = options.hash.format || 'MMM DD, YYYY',
+        locale = options.hash.locale || config.locale,
         timeago = options.hash.timeago,
-        timeNow = moment().tz(timezone);
+        timeNow = moment().tz(timezone),
+        mdate = moment(date).locale(locale),
+        date;
 
     if (timeago) {
-        date = timezone ?  moment(date).tz(timezone).from(timeNow) : moment(date).fromNow();
+        date = timezone ?  mdate.tz(timezone).from(timeNow) : mdate.fromNow();
     } else {
-        date = timezone ? moment(date).tz(timezone).format(f) : moment(date).format(f);
+        date = timezone ? mdate.tz(timezone).format(f) : mdate.format(f);
     }
 
     return date;

@@ -118,7 +118,8 @@ ConfigManager.prototype.set = function (config) {
         contentPath,
         schedulingPath,
         subdir,
-        assetHash;
+        assetHash,
+        locale;
 
     // Merge passed in config object onto our existing config object.
     // We're using merge here as it doesn't assign `undefined` properties
@@ -159,6 +160,9 @@ ConfigManager.prototype.set = function (config) {
             localPath = localPath.replace(/\/$/, '');
         }
     }
+
+    // Define the config locale
+    locale = this._config.locale || 'en';
 
     subdir = localPath === '/' ? '' : localPath;
 
@@ -292,7 +296,8 @@ ConfigManager.prototype.set = function (config) {
         times: {
             cannotScheduleAPostBeforeInMinutes: 2,
             publishAPostBySchedulerToleranceInMinutes: 2
-        }
+        },
+        locale: locale
     });
 
     // Also pass config object to
